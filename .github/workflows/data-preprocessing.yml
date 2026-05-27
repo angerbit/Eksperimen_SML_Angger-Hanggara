@@ -7,6 +7,8 @@ on:
     paths:
       - 'Membangun_model/data_preparation.ipynb'
       - 'Membangun_model/Churn_preprocessing/**'
+      - 'automate_Angger-Hanggara.py'
+      - 'test_preprocessing.py'
       - 'requirements.txt'
       - '.github/workflows/data-preprocessing.yml'
   
@@ -23,7 +25,7 @@ jobs:
     
     strategy:
       matrix:
-        python-version: ['3.12']
+        python-version: ['3.9', '3.12']
     
     steps:
     - name: Checkout code
@@ -47,33 +49,28 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Run data preprocessing notebook
+    - name: Run automated preprocessing tests
       run: |
-        jupyter nbconvert --to notebook --execute \
-          Membangun_model/data_preparation.ipynb \
-          --output Membangun_model/data_preparation_executed.ipynb
+        python test_preprocessing.py
     
-    - name: Upload preprocessed notebook
+    - name: Run automated preprocessing pipeline
+      run: |
+        python automate_Angger-Hanggara.py
+    
+    - name: Upload preprocessed features
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: preprocessed-notebook-py${{ matrix.python-version }}
-        path: Membangun_model/data_preparation_executed.ipynb
+        name: preprocessed-features-py${{ matrix.python-version }}
+        path: Membangun_model/X_preprocessed.csv
         retention-days: 30
     
-    - name: Generate HTML report
-      if: always()
-      run: |
-        jupyter nbconvert --to html \
-          Membangun_model/data_preparation_executed.ipynb \
-          --output Membangun_model/data_preparation_report.html
-    
-    - name: Upload HTML report
+    - name: Upload preprocessed target
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: preprocessing-report-py${{ matrix.python-version }}
-        path: Membangun_model/data_preparation_report.html
+        name: preprocessed-target-py${{ matrix.python-version }}
+        path: Membangun_model/y_preprocessed.csv
         retention-days: 30
     
     - name: Validate preprocessing results
@@ -83,20 +80,23 @@ jobs:
         import pandas as pd
         import os
         
-        # Check if notebook executed successfully
-        if os.path.exists('Membangun_model/data_preparation_executed.ipynb'):
-            print('✓ Notebook executed successfully')
-        else:
-            print('✗ Notebook execution failed')
-            exit(1)
+        # Check preprocessed output files
+        X_path = 'Membangun_model/X_preprocessed.csv'
+        y_path = 'Membangun_model/y_preprocessed.csv'
         
-        # Validate data file
-        csv_path = 'Membangun_model/Churn_preprocessing/Churn_Modelling.csv'
-        if os.path.exists(csv_path):
-            df = pd.read_csv(csv_path, encoding='latin-1')
-            print(f'✓ Data loaded successfully: {df.shape[0]} rows, {df.shape[1]} columns')
+        if os.path.exists(X_path) and os.path.exists(y_path):
+            X = pd.read_csv(X_path)
+            y = pd.read_csv(y_path)
+            print('✓ Preprocessed data files exist')
+            print(f'  Features shape: {X.shape}')
+            print(f'  Target shape: {y.shape}')
+            print(f'  Features columns: {list(X.columns[:10])}...')
         else:
-            print('✗ CSV file not found')
+            print('✗ Preprocessed data files not found')
+            if not os.path.exists(X_path):
+                print(f'  Missing: {X_path}')
+            if not os.path.exists(y_path):
+                print(f'  Missing: {y_path}')
             exit(1)
         "
     
@@ -105,6 +105,21 @@ jobs:
       run: |
         echo "## Data Preprocessing Workflow Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Execution Details" >> $GITHUB_STEP_SUMMARY
         echo "- **Python Version**: ${{ matrix.python-version }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Status**: Success ✓" >> $GITHUB_STEP_SUMMARY
-        echo "- **Artifacts**: Preprocessed notebook and HTML report available" >> $GITHUB_STEP_SUMMARY
+        echo "- **Pipeline Type**: Automated Python Script" >> $GITHUB_STEP_SUMMARY
+        echo "- **Script**: automate_Angger-Hanggara.py" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Output Files" >> $GITHUB_STEP_SUMMARY
+        echo "- **X_preprocessed.csv**: Features ready for training" >> $GITHUB_STEP_SUMMARY
+        echo "- **y_preprocessed.csv**: Target variable" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Processing Steps" >> $GITHUB_STEP_SUMMARY
+        echo "1. Load data from CSV" >> $GITHUB_STEP_SUMMARY
+        echo "2. Data wrangling (check missing values, duplicates)" >> $GITHUB_STEP_SUMMARY
+        echo "3. Drop unnecessary columns (RowNumber, CustomerId, Surname)" >> $GITHUB_STEP_SUMMARY
+        echo "4. Define features and target" >> $GITHUB_STEP_SUMMARY
+        echo "5. Encode categorical variables (Geography, Gender)" >> $GITHUB_STEP_SUMMARY
+        echo "6. Scale numerical features (StandardScaler)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Status**: Success" >> $GITHUB_STEP_SUMMARY
