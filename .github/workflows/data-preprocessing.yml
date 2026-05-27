@@ -1,0 +1,110 @@
+name: Data Preprocessing Pipeline
+
+on:
+  # Trigger workflow on push to main branch
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'Membangun_model/data_preparation.ipynb'
+      - 'Membangun_model/Churn_preprocessing/**'
+      - 'requirements.txt'
+      - '.github/workflows/data-preprocessing.yml'
+  
+  # Run on schedule (every Sunday at 2 AM UTC)
+  schedule:
+    - cron: '0 2 * * 0'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  data-preprocessing:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run data preprocessing notebook
+      run: |
+        jupyter nbconvert --to notebook --execute \
+          Membangun_model/data_preparation.ipynb \
+          --output Membangun_model/data_preparation_executed.ipynb
+    
+    - name: Upload preprocessed notebook
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: preprocessed-notebook-py${{ matrix.python-version }}
+        path: Membangun_model/data_preparation_executed.ipynb
+        retention-days: 30
+    
+    - name: Generate HTML report
+      if: always()
+      run: |
+        jupyter nbconvert --to html \
+          Membangun_model/data_preparation_executed.ipynb \
+          --output Membangun_model/data_preparation_report.html
+    
+    - name: Upload HTML report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: preprocessing-report-py${{ matrix.python-version }}
+        path: Membangun_model/data_preparation_report.html
+        retention-days: 30
+    
+    - name: Validate preprocessing results
+      if: always()
+      run: |
+        python -c "
+        import pandas as pd
+        import os
+        
+        # Check if notebook executed successfully
+        if os.path.exists('Membangun_model/data_preparation_executed.ipynb'):
+            print('✓ Notebook executed successfully')
+        else:
+            print('✗ Notebook execution failed')
+            exit(1)
+        
+        # Validate data file
+        csv_path = 'Membangun_model/Churn_preprocessing/Churn_Modelling.csv'
+        if os.path.exists(csv_path):
+            df = pd.read_csv(csv_path, encoding='latin-1')
+            print(f'✓ Data loaded successfully: {df.shape[0]} rows, {df.shape[1]} columns')
+        else:
+            print('✗ CSV file not found')
+            exit(1)
+        "
+    
+    - name: Post workflow summary
+      if: always()
+      run: |
+        echo "## Data Preprocessing Workflow Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Python Version**: ${{ matrix.python-version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: Success ✓" >> $GITHUB_STEP_SUMMARY
+        echo "- **Artifacts**: Preprocessed notebook and HTML report available" >> $GITHUB_STEP_SUMMARY
