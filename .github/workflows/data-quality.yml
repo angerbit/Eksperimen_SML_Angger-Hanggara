@@ -20,12 +20,15 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
+        python-version: '3.12'
     
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+    
+    - name: Install visualization libraries
+      run: pip install matplotlib seaborn
     
     - name: Run data quality checks
       run: |
@@ -48,3 +51,116 @@ jobs:
         print(df.dtypes)
         print('=' * 50)
         "
+    
+    - name: Run visual data quality checks
+      run: |
+        python -c "
+        import pandas as pd
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import os
+
+        # Load data
+        csv_path = 'Membangun_model/Churn_preprocessing/Churn_Modelling.csv'
+        df = pd.read_csv(csv_path, encoding='latin-1')
+        
+        os.makedirs('plots', exist_ok=True)
+
+        # 1. Data Wrangling: Boxplot untuk mendeteksi outliers
+        numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns
+        plt.figure(figsize=(15, 10))
+        for i, column in enumerate(numeric_columns):
+            plt.subplot(3, 4, i + 1)
+            sns.boxplot(x=df[column])
+            plt.title(f'Boxplot of {column}')
+        plt.tight_layout()
+        plt.savefig('plots/boxplots_numeric.png')
+        plt.close()
+
+        # 2.1 Univariate Analysis - Countplot variabel kategorikal
+        plt.figure(figsize=(12, 15))
+        plt.subplot(3, 2, 1)
+        ax1 = sns.countplot(x=df['Geography'])
+        ax1.bar_label(ax1.containers[0])
+        plt.title('Countplot of Geography')
+        plt.subplot(3, 2, 2)
+        ax2 = sns.countplot(x=df['Gender'])
+        ax2.bar_label(ax2.containers[0])
+        plt.title('Countplot of Gender')
+        plt.subplot(3, 2, 3)
+        ax3 = sns.countplot(x=df['NumOfProducts'])
+        ax3.bar_label(ax3.containers[0])
+        plt.title('Countplot of NumOfProducts')
+        plt.subplot(3, 2, 4)
+        ax4 = sns.countplot(x=df['HasCrCard'])
+        ax4.bar_label(ax4.containers[0])
+        plt.title('Countplot of HasCrCard')
+        plt.subplot(3, 2, 5)
+        ax5 = sns.countplot(x=df['IsActiveMember'])
+        ax5.bar_label(ax5.containers[0])
+        plt.title('Countplot of IsActiveMember')
+        plt.subplot(3, 2, 6)
+        ax6 = sns.countplot(x=df['Exited'])
+        ax6.bar_label(ax6.containers[0])
+        plt.title('Countplot of Exited')
+        plt.tight_layout()
+        plt.savefig('plots/countplots_categorical.png')
+        plt.close()
+
+        # Distribusi variabel numerik kontinu
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        sns.histplot(df['CreditScore'], kde=True, ax=axes[0,0])
+        axes[0,0].set_title('Distribution of CreditScore')
+        sns.histplot(df['Age'], kde=True, ax=axes[0,1])
+        axes[0,1].set_title('Distribution of Age')
+        sns.countplot(x=df['Tenure'], ax=axes[1,0])
+        axes[1,0].bar_label(axes[1,0].containers[0])
+        axes[1,0].set_title('Distribution of Tenure')
+        sns.histplot(df['Balance'], kde=True, ax=axes[1,1])
+        axes[1,1].set_title('Distribution of Balance')
+        plt.tight_layout()
+        plt.savefig('plots/distributions_continuous.png')
+        plt.close()
+
+        # 2.2 Bivariate Analysis - Fitur numerik vs Exited
+        numerical_features = ['CreditScore', 'Age', 'Balance', 'EstimatedSalary']
+        plt.figure(figsize=(20, 15))
+        for i, column in enumerate(numerical_features):
+            plt.subplot(2, 2, i + 1)
+            sns.boxplot(x=df['Exited'], y=df[column], hue=df['Exited'])
+            plt.title(f'{column} vs Exited')
+        plt.tight_layout()
+        plt.savefig('plots/bivariate_numerical_vs_exited.png')
+        plt.close()
+
+        # Fitur kategorikal vs Exited
+        categorical_features = ['Geography', 'Gender', 'NumOfProducts','Tenure', 'HasCrCard', 'IsActiveMember']
+        plt.figure(figsize=(20, 15))
+        for i, column in enumerate(categorical_features):
+            plt.subplot(3, 2, i + 1)
+            sns.countplot(x=df[column], hue=df['Exited'])
+            plt.title(f'{column} vs Exited')
+        plt.tight_layout()
+        plt.savefig('plots/bivariate_categorical_vs_exited.png')
+        plt.close()
+
+        # Correlation Matrix Heatmap
+        plt.figure(figsize=(12, 10))
+        corr_cols = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary', 'Exited']
+        correlation_matrix = df[corr_cols].corr()
+        sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', linewidths=0.5)
+        plt.title('Correlation Matrix')
+        plt.tight_layout()
+        plt.savefig('plots/correlation_matrix.png')
+        plt.close()
+
+        print('Semua plot visual telah disimpan di folder plots/')
+        "
+    
+    - name: Upload plots as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: data-quality-plots
+        path: plots/
